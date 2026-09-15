@@ -1,16 +1,11 @@
 /**
  * HÔM NAY ĂN GÌ - FAMILY MEAL PLANNER
- * Google Apps Script Backend (Code.gs)
+ * Google Apps Script Backend (Code.gs) - Phiên bản tối ưu v1.2
  * 
- * Hướng dẫn triển khai:
- * 1. Mở Google Sheets mới tại drive.google.com
- * 2. Vào Tiện ích mở rộng (Extensions) -> Apps Script
- * 3. Xóa hết mã cũ, dán toàn bộ nội dung file này vào
- * 4. Bấm "Triển khai" (Deploy) -> "Quản lý bản triển khai mới" (New deployment)
- * 5. Chọn loại: "Ứng dụng web" (Web app)
- *    - Thực thi dưới dạng (Execute as): "Tôi" (Me)
- *    - Ai có quyền truy cập (Who has access): "Bất kỳ ai" (Anyone)
- * 6. Bấm "Triển khai", cấp quyền và sao chép Web App URL dán vào ứng dụng.
+ * Khắc phục triệt để:
+ * 1. Lệch múi giờ ngày ăn giữa Google Sheets và Trình duyệt
+ * 2. Hỗ trợ cả GET và POST để không bị chặn CORS trên các trình duyệt di động
+ * 3. Hỗ trợ chọn nhiều món cho 1 bữa ăn
  */
 
 const SHEET_NAMES = {
@@ -69,10 +64,39 @@ function initDatabase() {
   }
 }
 
-// Xử lý GET Request - Đọc toàn bộ snapshot dữ liệu
+// Helper: Chuẩn hóa chuỗi ngày tháng YYYY-MM-DD an toàn tuyệt đối với múi giờ
+function getSafeDateStr(cellVal, ss) {
+  if (!cellVal) return '';
+  if (cellVal instanceof Date) {
+    // Dùng timezone của spreadsheet hoặc GMT+7 (Asia/Ho_Chi_Minh)
+    const tz = (ss && ss.getSpreadsheetTimeZone()) ? ss.getSpreadsheetTimeZone() : 'Asia/Ho_Chi_Minh';
+    return Utilities.formatDate(cellVal, tz, 'yyyy-MM-dd');
+  }
+  let s = String(cellVal).trim();
+  if (s.includes('T')) s = s.split('T')[0];
+  return s;
+}
+
+// Xử lý GET Request - Đọc toàn bộ snapshot hoặc thực thi action fallback
 function doGet(e) {
   try {
     initDatabase();
+    
+    // Nếu có tham số action trong URL GET (fallback khi POST bị chặn CORS trên trình duyệt)
+    if (e && e.parameter && e.parameter.action && e.parameter.action !== 'GET_SNAPSHOT') {
+      let payload = {};
+      if (e.parameter.payload) {
+        try {
+          payload = JSON.parse(e.parameter.payload);
+        } catch (err) {
+          payload = e.parameter;
+        }
+      } else {
+        payload = e.parameter;
+      }
+      return executeAction(e.parameter.action, payload);
+    }
+
     const data = getFullSnapshot();
     return createJsonResponse({ status: 'success', data: data });
   } catch (error) {
@@ -86,55 +110,64 @@ function doPost(e) {
     initDatabase();
     let body = {};
     if (e.postData && e.postData.contents) {
-      body = JSON.parse(e.postData.contents);
+      try {
+        body = JSON.parse(e.postData.contents);
+      } catch (err) {
+        body = e.parameter || {};
+      }
     } else if (e.parameter) {
       body = e.parameter;
     }
     
     const action = body.action;
     const payload = body.payload || body;
-    let result = {};
-    
-    switch (action) {
-      case 'VOTE':
-        result = handleVote(payload);
-        break;
-      case 'CHOT_MON':
-        result = handleChotMon(payload);
-        break;
-      case 'NHUONG_QUYEN':
-        result = handleNhuongQuyen(payload);
-        break;
-      case 'HUY_CHOT':
-        result = handleHuyChot(payload);
-        break;
-      case 'SPECIAL_MEAL':
-        result = handleSpecialMeal(payload);
-        break;
-      case 'SAVE_DISH':
-        result = handleSaveDish(payload);
-        break;
-      case 'DELETE_DISH':
-        result = handleDeleteDish(payload);
-        break;
-      case 'RESTORE_DISH':
-        result = handleRestoreDish(payload);
-        break;
-      case 'UPDATE_SCHEDULE':
-        result = handleUpdateSchedule(payload);
-        break;
-      case 'GET_SNAPSHOT':
-        result = getFullSnapshot();
-        break;
-      default:
-        return createJsonResponse({ status: 'error', message: 'Hành động không hợp lệ: ' + action });
-    }
-    
-    const snapshot = getFullSnapshot();
-    return createJsonResponse({ status: 'success', action: action, result: result, data: snapshot });
+    return executeAction(action, payload);
   } catch (error) {
     return createJsonResponse({ status: 'error', message: error.toString() });
   }
+}
+
+// Bộ xử lý thống nhất mọi Action
+function executeAction(action, payload) {
+  let result = {};
+  
+  switch (action) {
+    case 'VOTE':
+      result = handleVote(payload);
+      break;
+    case 'CHOT_MON':
+      result = handleChotMon(payload);
+      break;
+    case 'NHUONG_QUYEN':
+      result = handleNhuongQuyen(payload);
+      break;
+    case 'HUY_CHOT':
+      result = handleHuyChot(payload);
+      break;
+    case 'SPECIAL_MEAL':
+      result = handleSpecialMeal(payload);
+      break;
+    case 'SAVE_DISH':
+      result = handleSaveDish(payload);
+      break;
+    case 'DELETE_DISH':
+      result = handleDeleteDish(payload);
+      break;
+    case 'RESTORE_DISH':
+      result = handleRestoreDish(payload);
+      break;
+    case 'UPDATE_SCHEDULE':
+      result = handleUpdateSchedule(payload);
+      break;
+    case 'GET_SNAPSHOT':
+      result = getFullSnapshot();
+      break;
+    default:
+      return createJsonResponse({ status: 'error', message: 'Hành động không hợp lệ: ' + action });
+  }
+  
+  const snapshot = getFullSnapshot();
+  return createJsonResponse({ status: 'success', action: action, result: result, data: snapshot });
 }
 
 // Helper: Trả về JSON chuẩn CORS
@@ -146,6 +179,7 @@ function createJsonResponse(data) {
 // Đọc toàn bộ dữ liệu trả về cho Frontend
 function getFullSnapshot() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const tz = ss.getSpreadsheetTimeZone() || 'Asia/Ho_Chi_Minh';
   
   // 1. Món ăn
   const sheetMonAn = ss.getSheetByName(SHEET_NAMES.MON_AN);
@@ -179,17 +213,14 @@ function getFullSnapshot() {
   for (let i = 1; i < rowsLichSu.length; i++) {
     const r = rowsLichSu[i];
     if (!r[0]) continue;
-    let dateStr = r[0];
-    if (r[0] instanceof Date) {
-      dateStr = Utilities.formatDate(r[0], Session.getScriptTimeZone(), 'yyyy-MM-dd');
-    }
+    const dateStr = getSafeDateStr(r[0], ss);
     history.push({
       ngay: String(dateStr),
       bua: String(r[1]),
       mon_id: String(r[2] || ''),
       ghi_chu_dac_biet: String(r[3] || ''),
       nguoi_chot: String(r[4] || ''),
-      thoi_gian_chot: r[5] ? (r[5] instanceof Date ? Utilities.formatDate(r[5], Session.getScriptTimeZone(), 'yyyy-MM-dd HH:mm:ss') : String(r[5])) : ''
+      thoi_gian_chot: r[5] ? (r[5] instanceof Date ? Utilities.formatDate(r[5], tz, 'yyyy-MM-dd HH:mm:ss') : String(r[5])) : ''
     });
   }
   
@@ -200,10 +231,7 @@ function getFullSnapshot() {
   for (let i = 1; i < rowsBinhChon.length; i++) {
     const r = rowsBinhChon[i];
     if (!r[0]) continue;
-    let dateStr = r[0];
-    if (r[0] instanceof Date) {
-      dateStr = Utilities.formatDate(r[0], Session.getScriptTimeZone(), 'yyyy-MM-dd');
-    }
+    const dateStr = getSafeDateStr(r[0], ss);
     votes.push({
       ngay: String(dateStr),
       bua: String(r[1]),
@@ -217,24 +245,25 @@ function getFullSnapshot() {
     dishes: dishes,
     history: history,
     votes: votes,
-    serverTime: Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd HH:mm:ss')
+    serverTime: Utilities.formatDate(new Date(), tz, 'yyyy-MM-dd HH:mm:ss')
   };
 }
 
-// Xử lý vote món
+// Xử lý vote món (Hỗ trợ 1 hoặc nhiều món)
 function handleVote(payload) {
   // payload: { ngay, bua, nguoi_vote, mon_id }
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sheet = ss.getSheetByName(SHEET_NAMES.BINH_CHON);
   const rows = sheet.getDataRange().getValues();
+  const targetDate = String(payload.ngay).trim();
   
   let foundRowIndex = -1;
   let currentNhuongQuyen = false;
   
   for (let i = 1; i < rows.length; i++) {
     const r = rows[i];
-    let d = r[0] instanceof Date ? Utilities.formatDate(r[0], Session.getScriptTimeZone(), 'yyyy-MM-dd') : String(r[0]);
-    if (d === payload.ngay && r[1] === payload.bua && r[2] === payload.nguoi_vote) {
+    const d = getSafeDateStr(r[0], ss);
+    if (d === targetDate && String(r[1]) === String(payload.bua) && String(r[2]) === String(payload.nguoi_vote)) {
       foundRowIndex = i + 1;
       currentNhuongQuyen = Boolean(r[4]);
       break;
@@ -252,7 +281,7 @@ function handleVote(payload) {
     if (foundRowIndex > 0) {
       sheet.getRange(foundRowIndex, 4).setValue(monIdVal);
     } else {
-      sheet.appendRow([payload.ngay, payload.bua, payload.nguoi_vote, monIdVal, currentNhuongQuyen]);
+      sheet.appendRow(["'" + targetDate, payload.bua, payload.nguoi_vote, monIdVal, currentNhuongQuyen]);
     }
   }
   return { success: true };
@@ -264,15 +293,17 @@ function handleChotMon(payload) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sheetHistory = ss.getSheetByName(SHEET_NAMES.LICH_SU);
   const rowsHistory = sheetHistory.getDataRange().getValues();
+  const tz = ss.getSpreadsheetTimeZone() || 'Asia/Ho_Chi_Minh';
+  const nowStr = Utilities.formatDate(new Date(), tz, 'yyyy-MM-dd HH:mm:ss');
   
-  const nowStr = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd HH:mm:ss');
   const monIdVal = Array.isArray(payload.mon_id) ? payload.mon_id.join(',') : (payload.mon_id || '');
+  const targetDate = String(payload.ngay).trim();
   let targetRow = -1;
   
   for (let i = 1; i < rowsHistory.length; i++) {
     const r = rowsHistory[i];
-    let d = r[0] instanceof Date ? Utilities.formatDate(r[0], Session.getScriptTimeZone(), 'yyyy-MM-dd') : String(r[0]);
-    if (d === payload.ngay && r[1] === payload.bua) {
+    const d = getSafeDateStr(r[0], ss);
+    if (d === targetDate && String(r[1]) === String(payload.bua)) {
       targetRow = i + 1;
       break;
     }
@@ -286,8 +317,9 @@ function handleChotMon(payload) {
       nowStr
     ]]);
   } else {
+    // Ghi date với tiền tố dấu ' để Google Sheets không làm lệch múi giờ
     sheetHistory.appendRow([
-      payload.ngay,
+      "'" + targetDate,
       payload.bua,
       monIdVal,
       payload.ghi_chu_dac_biet || '',
@@ -297,7 +329,7 @@ function handleChotMon(payload) {
   }
   
   // Xóa các vote của bữa này trong Sheet BINH_CHON
-  clearMealVotes(payload.ngay, payload.bua);
+  clearMealVotes(targetDate, payload.bua);
   
   return { success: true };
 }
@@ -308,11 +340,12 @@ function handleHuyChot(payload) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sheetHistory = ss.getSheetByName(SHEET_NAMES.LICH_SU);
   const rows = sheetHistory.getDataRange().getValues();
+  const targetDate = String(payload.ngay).trim();
   
   for (let i = 1; i < rows.length; i++) {
     const r = rows[i];
-    let d = r[0] instanceof Date ? Utilities.formatDate(r[0], Session.getScriptTimeZone(), 'yyyy-MM-dd') : String(r[0]);
-    if (d === payload.ngay && r[1] === payload.bua) {
+    const d = getSafeDateStr(r[0], ss);
+    if (d === targetDate && String(r[1]) === String(payload.bua)) {
       sheetHistory.deleteRow(i + 1);
       break;
     }
@@ -326,20 +359,20 @@ function handleNhuongQuyen(payload) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sheet = ss.getSheetByName(SHEET_NAMES.BINH_CHON);
   const rows = sheet.getDataRange().getValues();
+  const targetDate = String(payload.ngay).trim();
   
   let found = false;
   for (let i = 1; i < rows.length; i++) {
     const r = rows[i];
-    let d = r[0] instanceof Date ? Utilities.formatDate(r[0], Session.getScriptTimeZone(), 'yyyy-MM-dd') : String(r[0]);
-    if (d === payload.ngay && r[1] === payload.bua) {
+    const d = getSafeDateStr(r[0], ss);
+    if (d === targetDate && String(r[1]) === String(payload.bua)) {
       sheet.getRange(i + 1, 5).setValue(payload.value);
       found = true;
     }
   }
   
   if (!found) {
-    // Nếu chưa có ai vote mà Mẹ nhường quyền trước
-    sheet.appendRow([payload.ngay, payload.bua, 'SYSTEM', '', payload.value]);
+    sheet.appendRow(["'" + targetDate, payload.bua, 'SYSTEM', '', payload.value]);
   }
   
   return { success: true };
@@ -362,11 +395,12 @@ function clearMealVotes(ngay, bua) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sheet = ss.getSheetByName(SHEET_NAMES.BINH_CHON);
   const rows = sheet.getDataRange().getValues();
+  const targetDate = String(ngay).trim();
   
   for (let i = rows.length - 1; i >= 1; i--) {
     const r = rows[i];
-    let d = r[0] instanceof Date ? Utilities.formatDate(r[0], Session.getScriptTimeZone(), 'yyyy-MM-dd') : String(r[0]);
-    if (d === ngay && r[1] === bua) {
+    const d = getSafeDateStr(r[0], ss);
+    if (d === targetDate && String(r[1]) === String(bua)) {
       sheet.deleteRow(i + 1);
     }
   }
@@ -374,7 +408,6 @@ function clearMealVotes(ngay, bua) {
 
 // Thêm / Sửa món ăn
 function handleSaveDish(dish) {
-  // dish: { id, ten_mon, bua_an, loai_hinh, ten_quan, so_dien_thoai, con_thich }
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sheet = ss.getSheetByName(SHEET_NAMES.MON_AN);
   const rows = sheet.getDataRange().getValues();
@@ -408,15 +441,14 @@ function handleSaveDish(dish) {
       dish.ten_quan || '',
       dish.so_dien_thoai || '',
       Boolean(dish.con_thich),
-      false // da_xoa = false
+      false
     ]);
   }
   return { success: true };
 }
 
-// Xóa mềm món ăn (Chuyển vào thùng rác da_xoa = TRUE)
+// Xóa mềm món ăn (da_xoa = TRUE)
 function handleDeleteDish(payload) {
-  // payload: { id }
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sheet = ss.getSheetByName(SHEET_NAMES.MON_AN);
   const rows = sheet.getDataRange().getValues();
@@ -430,9 +462,8 @@ function handleDeleteDish(payload) {
   return { success: false, message: 'Không tìm thấy món' };
 }
 
-// Khôi phục món ăn từ thùng rác (da_xoa = FALSE)
+// Khôi phục món ăn (da_xoa = FALSE)
 function handleRestoreDish(payload) {
-  // payload: { id }
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sheet = ss.getSheetByName(SHEET_NAMES.MON_AN);
   const rows = sheet.getDataRange().getValues();
@@ -446,36 +477,39 @@ function handleRestoreDish(payload) {
   return { success: false, message: 'Không tìm thấy món' };
 }
 
-// Cập nhật kế hoạch tuần hàng loạt (ví dụ sau khi xáo trộn T2-T6)
+// Cập nhật kế hoạch tuần hàng loạt
 function handleUpdateSchedule(payload) {
-  // payload: { meals: [ { ngay, bua, mon_id, ghi_chu_dac_biet, nguoi_chot } ] }
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sheet = ss.getSheetByName(SHEET_NAMES.LICH_SU);
   const rows = sheet.getDataRange().getValues();
-  const nowStr = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd HH:mm:ss');
+  const tz = ss.getSpreadsheetTimeZone() || 'Asia/Ho_Chi_Minh';
+  const nowStr = Utilities.formatDate(new Date(), tz, 'yyyy-MM-dd HH:mm:ss');
   
   (payload.meals || []).forEach(meal => {
+    const targetDate = String(meal.ngay).trim();
     let targetRow = -1;
     for (let i = 1; i < rows.length; i++) {
-      let d = rows[i][0] instanceof Date ? Utilities.formatDate(rows[i][0], Session.getScriptTimeZone(), 'yyyy-MM-dd') : String(rows[i][0]);
-      if (d === meal.ngay && rows[i][1] === meal.bua) {
+      const d = getSafeDateStr(rows[i][0], ss);
+      if (d === targetDate && String(rows[i][1]) === String(meal.bua)) {
         targetRow = i + 1;
         break;
       }
     }
     
+    const monIdVal = Array.isArray(meal.mon_id) ? meal.mon_id.join(',') : (meal.mon_id || '');
+
     if (targetRow > 0) {
       sheet.getRange(targetRow, 3, 1, 4).setValues([[
-        meal.mon_id || '',
+        monIdVal,
         meal.ghi_chu_dac_biet || '',
         meal.nguoi_chot || 'AUTO',
         nowStr
       ]]);
     } else {
       sheet.appendRow([
-        meal.ngay,
+        "'" + targetDate,
         meal.bua,
-        meal.mon_id || '',
+        monIdVal,
         meal.ghi_chu_dac_biet || '',
         meal.nguoi_chot || 'AUTO',
         nowStr

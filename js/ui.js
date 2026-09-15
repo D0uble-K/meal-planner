@@ -774,14 +774,16 @@ class UIRenderer {
                 ${activeDishes.map(dish => {
                   const isChecked = preSelectedIds.has(dish.id);
                   return `
-                    <label class="p-2.5 rounded-xl border border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800 flex items-center justify-between text-xs cursor-pointer transition">
-                      <div class="flex items-center space-x-2.5">
+                    <div class="p-2.5 rounded-xl border border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800 flex items-center justify-between text-xs transition">
+                      <label class="flex items-center space-x-2.5 cursor-pointer flex-1 py-1">
                         <input type="checkbox" name="chot_dish_id" value="${dish.id}" ${isChecked ? 'checked' : ''} class="w-4 h-4 text-emerald-600 rounded focus:ring-emerald-500">
                         <span class="font-medium text-gray-800 dark:text-gray-200">${dish.ten_mon}</span>
                         ${dish.con_thich ? '<span class="text-amber-500 text-xs">⭐</span>' : ''}
-                      </div>
-                      <span class="text-[10px] text-gray-400">${dish.loai_hinh === 'AN_TIEM' ? 'Ăn tiệm' : 'Tự nấu'}</span>
-                    </label>
+                      </label>
+                      <button type="button" data-quick-chot-id="${dish.id}" class="px-2.5 py-1 rounded-lg bg-gray-100 dark:bg-gray-700 hover:bg-emerald-500 hover:text-white text-gray-600 dark:text-gray-300 text-[11px] font-semibold transition ml-2">
+                        Chốt ngay
+                      </button>
+                    </div>
                   `;
                 }).join('')}
               </div>
@@ -813,6 +815,15 @@ class UIRenderer {
         cb.addEventListener('change', updateCount);
       });
       updateCount();
+
+      modal.querySelectorAll('button[data-quick-chot-id]').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          const dishId = e.currentTarget.getAttribute('data-quick-chot-id');
+          this.api.chotMon(dateStr, mealType, dishId, choter);
+          modal.remove();
+          window.showToast('Đã chốt món thành công!');
+        });
+      });
 
       modal.querySelector('#btn-confirm-chot')?.addEventListener('click', () => {
         const checkedList = Array.from(new Set(Array.from(modal.querySelectorAll('input[name="chot_dish_id"]:checked')).map(cb => cb.value)));

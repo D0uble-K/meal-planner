@@ -81,13 +81,13 @@ class ApiService {
       return { status: 'success', offline: true };
     }
 
+    // 1. Thử gửi POST (text/plain để tránh CORS preflight)
     try {
-      // Gửi POST request lên Google Apps Script
       const response = await fetch(this.store.gasUrl, {
         method: 'POST',
         redirect: 'follow',
         headers: {
-          'Content-Type': 'text/plain;charset=utf-8', // Tránh CORS preflight phức tạp trên GAS
+          'Content-Type': 'text/plain;charset=utf-8',
         },
         body: JSON.stringify({
           action: action,
@@ -99,12 +99,36 @@ class ApiService {
         const result = await response.json();
         if (result.status === 'success' && result.data) {
           this.store.updateFromSnapshot(result.data);
+          return result;
         }
-        return result;
       }
     } catch (err) {
-      console.warn(`Lỗi khi gửi hành động ${action} lên server:`, err);
+      console.warn(`POST không thành công (${err.message}), tự động chuyển sang GET fallback...`);
     }
+
+    // 2. Fallback qua GET (Google Apps Script luôn chấp nhận GET không bị chặn CORS)
+    try {
+      const url = new URL(this.store.gasUrl);
+      url.searchParams.set('action', action);
+      url.searchParams.set('payload', JSON.stringify(payload));
+      url.searchParams.set('t', Date.now().toString());
+
+      const response = await fetch(url.toString(), {
+        method: 'GET',
+        redirect: 'follow'
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        if (result.status === 'success' && result.data) {
+          this.store.updateFromSnapshot(result.data);
+          return result;
+        }
+      }
+    } catch (getErr) {
+      console.warn('Fallback GET cũng gặp sự cố, giữ lại dữ liệu cục bộ:', getErr);
+    }
+
     return { status: 'pending_sync' };
   }
 

@@ -94,20 +94,41 @@ class Store {
     this.notify();
   }
 
-  // Cập nhật dữ liệu từ Server snapshot
+  // Cập nhật dữ liệu từ Server snapshot (Hợp nhất thông minh, chống mất dữ liệu)
   updateFromSnapshot(data) {
     if (data.dishes && Array.isArray(data.dishes)) {
       this.dishes = data.dishes;
       localStorage.setItem(this.STORAGE_KEYS.DISHES, JSON.stringify(this.dishes));
     }
+
     if (data.history && Array.isArray(data.history)) {
-      this.history = data.history;
+      const todayStr = this.getTodayStr();
+      const serverHistory = data.history.map(item => ({
+        ...item,
+        ngay: String(item.ngay || '').trim()
+      }));
+
+      // Nếu local vừa có món chốt hôm nay mà server chưa kịp cập nhật hoặc rỗng, giữ lại món đó
+      const localTodayMeals = this.history.filter(h => h.ngay === todayStr && (h.mon_id || h.ghi_chu_dac_biet));
+      localTodayMeals.forEach(localMeal => {
+        const inServer = serverHistory.find(sh => sh.ngay === todayStr && sh.bua === localMeal.bua && (sh.mon_id || sh.ghi_chu_dac_biet));
+        if (!inServer) {
+          serverHistory.push(localMeal);
+        }
+      });
+
+      this.history = serverHistory;
       localStorage.setItem(this.STORAGE_KEYS.HISTORY, JSON.stringify(this.history));
     }
+
     if (data.votes && Array.isArray(data.votes)) {
-      this.votes = data.votes;
+      this.votes = data.votes.map(v => ({
+        ...v,
+        ngay: String(v.ngay || '').trim()
+      }));
       localStorage.setItem(this.STORAGE_KEYS.VOTES, JSON.stringify(this.votes));
     }
+
     this.lastSync = new Date().toISOString();
     localStorage.setItem(this.STORAGE_KEYS.LAST_SYNC, this.lastSync);
     this.notify();
