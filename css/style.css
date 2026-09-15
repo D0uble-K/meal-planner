@@ -1,0 +1,106 @@
+/* Custom styles for Hôm Nay Ăn Gì - Family Meal Planner */
+
+:root {
+  --primary: #FF6B4A;
+  --primary-hover: #E85536;
+  --primary-light: #FFF0ED;
+  --secondary: #22C55E;
+  --secondary-light: #F0FDF4;
+  --warning: #F59E0B;
+  --warning-light: #FEF3C7;
+  --bg-main: #FDFBF7;
+  --bg-card: #FFFFFF;
+  --text-main: #1F2937;
+  --text-muted: #6B7280;
+  --border-color: #F3ECE2;
+  --safe-bottom: env(safe-area-inset-bottom, 16px);
+}
+
+.dark {
+  --primary: #FF7D5F;
+  --primary-hover: #FF9075;
+  --primary-light: #3D221D;
+  --secondary: #34D399;
+  --secondary-light: #064E3B;
+  --warning: #FBBF24;
+  --warning-light: #451A03;
+  --bg-main: #121316;
+  --bg-card: #1E2024;
+  --text-main: #F3F4F6;
+  --text-muted: #9CA3AF;
+  --border-color: #2D3139;
+}
+
+body {
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  background-color: var(--bg-main);
+  color: var(--text-main);
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+}
+
+/* Thao tác nút tối ưu cho ngón cái trên điện thoại */
+button, a, input, select {
+  touch-action: manipulation;
+}
+
+/* Hiệu ứng rung xoay xúc xắc khi bốc thăm */
+@keyframes diceShake {
+  0% { transform: rotate(0deg) scale(1); }
+  20% { transform: rotate(-25deg) scale(1.18); }
+  40% { transform: rotate(25deg) scale(1.18); }
+  60% { transform: rotate(-20deg) scale(1.15); }
+  80% { transform: rotate(15deg) scale(1.1); }
+  100% { transform: rotate(0deg) scale(1); }
+}
+
+.animate-dice {
+  animation: diceShake 0.6s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
+}
+
+/* Hiệu ứng nhịp đập khi có phiếu vote mới */
+@keyframes pulseGlow {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255, 107, 74, 0.4); }
+  50% { box-shadow: 0 0 0 8px rgba(255, 107, 74, 0); }
+}
+
+.pulse-vote {
+  animation: pulseGlow 1.8s infinite;
+}
+
+/* Card trạng thái đã chốt */
+.meal-card-decided {
+  border-left: 5px solid #22C55E !important;
+  background: linear-gradient(135deg, rgba(34, 197, 94, 0.05) 0%, var(--bg-card) 100%);
+}
+
+.meal-card-pending {
+  border-left: 5px solid #F59E0B !important;
+}
+
+/* Custom Scrollbar cho gọn */
+::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #CBD5E1;
+  border-radius: 4px;
+}
+.dark ::-webkit-scrollbar-thumb {
+  background: #475569;
+}
+
+/* Safe bottom spacing cho thanh điều hướng di động */
+.pb-safe {
+  padding-bottom: calc(5rem + var(--safe-bottom));
+}
+
+/* Modal backdrop blur */
+.modal-backdrop {
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
