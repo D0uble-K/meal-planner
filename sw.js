@@ -3,7 +3,7 @@
  * Đảm bảo ứng dụng chạy mượt mà ngay cả khi offline (mất mạng/wifi)
  */
 
-const CACHE_NAME = 'meal-planner-v1.4.0';
+const CACHE_NAME = 'meal-planner-v1.5.0';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',

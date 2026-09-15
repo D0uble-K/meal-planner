@@ -707,22 +707,45 @@ class UIRenderer {
     }
   }
 
-  // Modal Chốt món chính (Hỗ trợ nhiều món)
+  // Modal Chốt món chính (Hỗ trợ nhiều món, hiển thị rõ người vote, chống trùng lặp)
   openChotModal(dateStr, mealType) {
     const votes = this.store.getMealVotes(dateStr, mealType);
     const activeDishes = this.store.getActiveDishes().filter(d => d.bua_an && d.bua_an.includes(mealType));
     const choter = this.store.role === 'FATHER' ? 'BA' : 'ME';
 
-    // Thu thập các món đã được gia đình vote hoặc đang được chốt trước đó
-    const preSelectedIds = new Set();
+    // Thu thập các món đã được vote và nhãn người vote tương ứng (chống trùng lặp món)
+    const votedDishMap = new Map();
     votes.forEach(v => {
       const ids = String(v.mon_id || '').split(',').map(s => s.trim()).filter(Boolean);
-      ids.forEach(id => preSelectedIds.add(id));
+      let voterLabel = 'Gia đình';
+      let voterColor = 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300';
+      if (v.nguoi_vote === 'BA') { voterLabel = 'Ba chọn'; voterColor = 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300'; }
+      else if (v.nguoi_vote === 'ME') { voterLabel = 'Mẹ chọn'; voterColor = 'bg-pink-100 text-pink-700 dark:bg-pink-900/40 dark:text-pink-300'; }
+      else if (v.nguoi_vote === 'CON_DO_BA_CHON') { voterLabel = 'Ba chọn cho Con'; voterColor = 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300'; }
+      else if (v.nguoi_vote === 'CON_DO_ME_CHON') { voterLabel = 'Mẹ chọn cho Con'; voterColor = 'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300'; }
+
+      ids.forEach(id => {
+        if (!votedDishMap.has(id)) {
+          votedDishMap.set(id, []);
+        }
+        // Tránh lặp nhãn nếu cùng 1 người chọn
+        if (!votedDishMap.get(id).some(vt => vt.label === voterLabel)) {
+          votedDishMap.get(id).push({ label: voterLabel, color: voterColor });
+        }
+      });
     });
-    const currentDecision = this.store.getMealDecision(dateStr, mealType);
-    if (currentDecision && currentDecision.mon_id) {
-      String(currentDecision.mon_id).split(',').map(s => s.trim()).filter(Boolean).forEach(id => preSelectedIds.add(id));
-    }
+
+    // Danh sách món đã được gia đình vote (mỗi món là 1 dòng duy nhất)
+    const votedDishes = [];
+    votedDishMap.forEach((voters, dishId) => {
+      const dish = this.store.getDishById(dishId);
+      if (dish) {
+        votedDishes.push({ dish, voters });
+      }
+    });
+
+    // Các món khác trong kho: LOẠI TRỪ các món đã nằm trong votedDishes để không bị trùng lặp ô tick!
+    const otherDishes = activeDishes.filter(dish => !votedDishMap.has(dish.id));
 
     const modalHtml = `
       <div id="modal-chot" class="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 modal-backdrop bg-black/40">
@@ -730,7 +753,7 @@ class UIRenderer {
           <div class="flex items-center justify-between pb-3 border-b border-gray-100 dark:border-gray-800">
             <div>
               <h3 class="font-bold text-gray-900 dark:text-gray-100 text-base">🎯 Quyết Định Chốt Thực Đơn</h3>
-              <p class="text-xs text-gray-400 mt-0.5">Bữa ${mealType === 'SANG' ? 'Sáng' : (mealType === 'TRUA' ? 'Trưa' : 'Tối')} • Chọn 1 hoặc nhiều món (thịt, canh, xào...)</p>
+              <p class="text-xs text-gray-400 mt-0.5">Bữa ${mealType === 'SANG' ? 'Sáng' : (mealType === 'TRUA' ? 'Trưa' : 'Tối')} • Tick chọn các món sẽ nấu/gọi ship</p>
             </div>
             <button id="btn-close-chot" class="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
               <i class="fa-solid fa-xmark text-lg"></i>
@@ -738,54 +761,59 @@ class UIRenderer {
           </div>
 
           <div class="overflow-y-auto py-3 space-y-3 flex-1 pr-1">
-            ${votes.length > 0 ? `
+            ${votedDishes.length > 0 ? `
               <div>
                 <div class="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-1.5 flex items-center justify-between">
                   <span>Món được gia đình bình chọn</span>
                   <span class="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold">(Được tick sẵn)</span>
                 </div>
                 <div class="space-y-1.5">
-                  ${votes.map(v => {
-                    const votedDishes = this.store.getDishesByIds(v.mon_id);
-                    if (votedDishes.length === 0) return '';
-                    return votedDishes.map(dish => `
-                      <label class="w-full p-2.5 rounded-xl border border-emerald-200 dark:border-emerald-800 bg-emerald-50/40 dark:bg-emerald-950/20 hover:bg-emerald-100/50 flex items-center justify-between cursor-pointer transition">
-                        <div class="flex items-center space-x-2.5">
-                          <input type="checkbox" name="chot_dish_id" value="${dish.id}" checked class="w-4 h-4 text-emerald-600 rounded focus:ring-emerald-500">
-                          <div>
+                  ${votedDishes.map(({ dish, voters }) => `
+                    <div class="p-2.5 rounded-xl border border-emerald-200 dark:border-emerald-800 bg-emerald-50/40 dark:bg-emerald-950/20 hover:bg-emerald-100/40 flex items-center justify-between text-xs transition">
+                      <label class="flex items-center space-x-2.5 cursor-pointer flex-1 py-0.5">
+                        <input type="checkbox" name="chot_dish_id" value="${dish.id}" checked class="w-4 h-4 text-emerald-600 rounded focus:ring-emerald-500">
+                        <div>
+                          <div class="flex items-center space-x-1.5">
                             <span class="font-bold text-sm text-gray-800 dark:text-gray-100">${dish.ten_mon}</span>
-                            ${dish.con_thich ? '<span class="text-amber-500 text-xs ml-1">⭐</span>' : ''}
-                            <div class="text-[10px] text-emerald-600 dark:text-emerald-400">Được gia đình đề xuất</div>
+                            ${dish.con_thich ? '<span class="text-amber-500 text-xs" title="Món con thích">⭐</span>' : ''}
+                          </div>
+                          <div class="flex items-center space-x-1 mt-0.5 flex-wrap gap-1">
+                            ${voters.map(vt => `<span class="px-1.5 py-0.5 rounded text-[10px] font-semibold ${vt.color}">${vt.label}</span>`).join('')}
+                            <span class="text-[10px] text-gray-400 ml-1">• ${dish.loai_hinh === 'AN_TIEM' ? 'Ăn tiệm' : 'Tự nấu'}</span>
                           </div>
                         </div>
-                        <span class="text-[11px] text-gray-400">${dish.loai_hinh === 'AN_TIEM' ? 'Ăn tiệm' : 'Tự nấu'}</span>
                       </label>
-                    `).join('');
-                  }).join('')}
+                      <button type="button" data-quick-chot-id="${dish.id}" class="px-2.5 py-1 rounded-lg bg-gray-100 dark:bg-gray-700 hover:bg-emerald-500 hover:text-white text-gray-600 dark:text-gray-300 text-[11px] font-semibold transition ml-2 flex-shrink-0">
+                        Chốt ngay
+                      </button>
+                    </div>
+                  `).join('')}
                 </div>
               </div>
             ` : ''}
 
             <div>
               <div class="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">
-                ${votes.length > 0 ? 'Thêm/chọn món khác từ kho' : 'Chọn các món từ kho (mặn, canh, xào...)'}
+                ${votedDishes.length > 0 ? 'Thêm món khác từ kho (mặn, canh, xào...)' : 'Chọn món từ kho (mặn, canh, xào...)'}
               </div>
               <div class="space-y-1">
-                ${activeDishes.map(dish => {
-                  const isChecked = preSelectedIds.has(dish.id);
-                  return `
-                    <div class="p-2.5 rounded-xl border border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800 flex items-center justify-between text-xs transition">
-                      <label class="flex items-center space-x-2.5 cursor-pointer flex-1 py-1">
-                        <input type="checkbox" name="chot_dish_id" value="${dish.id}" ${isChecked ? 'checked' : ''} class="w-4 h-4 text-emerald-600 rounded focus:ring-emerald-500">
+                ${otherDishes.length === 0 ? `
+                  <div class="text-center py-3 text-gray-400 text-xs">Tất cả món trong kho đã được gia đình chọn ở trên.</div>
+                ` : otherDishes.map(dish => `
+                  <div class="p-2.5 rounded-xl border border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800 flex items-center justify-between text-xs transition">
+                    <label class="flex items-center space-x-2.5 cursor-pointer flex-1 py-0.5">
+                      <input type="checkbox" name="chot_dish_id" value="${dish.id}" class="w-4 h-4 text-emerald-600 rounded focus:ring-emerald-500">
+                      <div>
                         <span class="font-medium text-gray-800 dark:text-gray-200">${dish.ten_mon}</span>
-                        ${dish.con_thich ? '<span class="text-amber-500 text-xs">⭐</span>' : ''}
-                      </label>
-                      <button type="button" data-quick-chot-id="${dish.id}" class="px-2.5 py-1 rounded-lg bg-gray-100 dark:bg-gray-700 hover:bg-emerald-500 hover:text-white text-gray-600 dark:text-gray-300 text-[11px] font-semibold transition ml-2">
-                        Chốt ngay
-                      </button>
-                    </div>
-                  `;
-                }).join('')}
+                        ${dish.con_thich ? '<span class="text-amber-500 text-xs ml-1">⭐</span>' : ''}
+                        <span class="text-[10px] text-gray-400 ml-1">• ${dish.loai_hinh === 'AN_TIEM' ? 'Ăn tiệm' : 'Tự nấu'}</span>
+                      </div>
+                    </label>
+                    <button type="button" data-quick-chot-id="${dish.id}" class="px-2.5 py-1 rounded-lg bg-gray-100 dark:bg-gray-700 hover:bg-emerald-500 hover:text-white text-gray-600 dark:text-gray-300 text-[11px] font-semibold transition ml-2 flex-shrink-0">
+                      Chốt ngay
+                    </button>
+                  </div>
+                `).join('')}
               </div>
             </div>
           </div>
@@ -804,7 +832,7 @@ class UIRenderer {
       modal.querySelector('#btn-close-chot')?.addEventListener('click', () => modal.remove());
 
       const updateCount = () => {
-        const checkedList = Array.from(new Set(Array.from(modal.querySelectorAll('input[name="chot_dish_id"]:checked')).map(cb => cb.value)));
+        const checkedList = Array.from(modal.querySelectorAll('input[name="chot_dish_id"]:checked')).map(cb => cb.value);
         const label = modal.querySelector('#btn-chot-label');
         if (label) {
           label.textContent = checkedList.length > 0 ? `Chốt ${checkedList.length} món này` : 'Vui lòng tick chọn món';
@@ -826,7 +854,7 @@ class UIRenderer {
       });
 
       modal.querySelector('#btn-confirm-chot')?.addEventListener('click', () => {
-        const checkedList = Array.from(new Set(Array.from(modal.querySelectorAll('input[name="chot_dish_id"]:checked')).map(cb => cb.value)));
+        const checkedList = Array.from(modal.querySelectorAll('input[name="chot_dish_id"]:checked')).map(cb => cb.value);
         if (checkedList.length === 0) {
           window.showToast('Vui lòng tick chọn ít nhất một món ăn!');
           return;
