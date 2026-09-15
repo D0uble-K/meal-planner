@@ -225,26 +225,54 @@ class UIRenderer {
         <!-- Trạng thái ĐÃ CHỐT -->
         ${isDecided ? `
           <div class="py-3.5 space-y-2.5">
-            <div class="flex items-start justify-between">
-              <div>
-                <div class="font-bold text-gray-900 dark:text-gray-100 text-base">
-                  ${decidedDish ? decidedDish.ten_mon : (decision.ghi_chu_dac_biet || 'Món tự do')}
-                </div>
-                ${decidedDish && decidedDish.loai_hinh === 'AN_TIEM' ? `
-                  <div class="text-xs text-orange-600 dark:text-orange-400 mt-0.5 flex items-center space-x-1.5">
-                    <i class="fa-solid fa-store"></i>
-                    <span>${decidedDish.ten_quan || 'Ăn tiệm / Gọi ship'}</span>
-                  </div>
-                ` : ''}
-              </div>
+            ${(() => {
+              const decidedDishes = this.store.getDishesByIds(decision.mon_id);
+              if (decidedDishes.length > 0) {
+                return `
+                  <div class="space-y-2">
+                    ${decidedDishes.map(dish => `
+                      <div class="p-2.5 rounded-xl bg-emerald-50/50 dark:bg-emerald-950/20 border border-emerald-100 dark:border-emerald-900/40 flex items-center justify-between">
+                        <div>
+                          <div class="font-bold text-gray-900 dark:text-gray-100 text-sm flex items-center space-x-1.5">
+                            <span>${dish.ten_mon}</span>
+                            ${dish.con_thich ? '<span class="text-amber-500 text-xs" title="Món khoái khẩu của con">⭐</span>' : ''}
+                          </div>
+                          ${dish.loai_hinh === 'AN_TIEM' ? `
+                            <div class="text-[11px] text-orange-600 dark:text-orange-400 mt-0.5 flex items-center space-x-1">
+                              <i class="fa-solid fa-store"></i>
+                              <span>${dish.ten_quan || 'Ăn tiệm / Gọi ship'}</span>
+                            </div>
+                          ` : `
+                            <div class="text-[11px] text-emerald-600 dark:text-emerald-400 mt-0.5">
+                              <span>Tự nấu tại nhà</span>
+                            </div>
+                          `}
+                        </div>
 
-              ${decidedDish && decidedDish.so_dien_thoai ? `
-                <a href="tel:${decidedDish.so_dien_thoai}" class="px-3 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl text-xs font-semibold shadow-sm flex items-center space-x-1.5 transition">
-                  <i class="fa-solid fa-phone"></i>
-                  <span>Gọi ship</span>
-                </a>
-              ` : ''}
-            </div>
+                        ${dish.so_dien_thoai ? `
+                          <a href="tel:${dish.so_dien_thoai}" class="px-2.5 py-1 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg text-xs font-semibold shadow-xs flex items-center space-x-1 transition">
+                            <i class="fa-solid fa-phone"></i>
+                            <span>Gọi ship</span>
+                          </a>
+                        ` : ''}
+                      </div>
+                    `).join('')}
+
+                    ${decision.ghi_chu_dac_biet ? `
+                      <div class="text-xs text-gray-600 dark:text-gray-300 italic pt-0.5">
+                        <i class="fa-solid fa-note-sticky text-gray-400 mr-1"></i>${decision.ghi_chu_dac_biet}
+                      </div>
+                    ` : ''}
+                  </div>
+                `;
+              } else {
+                return `
+                  <div class="font-bold text-gray-900 dark:text-gray-100 text-base">
+                    ${decision.ghi_chu_dac_biet || 'Món tự do'}
+                  </div>
+                `;
+              }
+            })()}
 
             <div class="text-[11px] text-gray-400 dark:text-gray-500 flex items-center justify-between pt-1">
               <span>Được chốt bởi: <strong class="text-gray-600 dark:text-gray-300">${decision.nguoi_chot === 'ME' ? 'Mẹ' : (decision.nguoi_chot === 'BA' ? 'Ba' : decision.nguoi_chot)}</strong></span>
@@ -268,7 +296,8 @@ class UIRenderer {
               ` : `
                 <div class="space-y-1">
                   ${votes.map(v => {
-                    const dish = this.store.getDishById(v.mon_id);
+                    const votedDishes = this.store.getDishesByIds(v.mon_id);
+                    const dishNames = votedDishes.length > 0 ? votedDishes.map(d => d.ten_mon).join(', ') : 'Đã chọn món';
                     let voterLabel = '';
                     let badgeColor = 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300';
                     if (v.nguoi_vote === 'BA') { voterLabel = 'Ba chọn'; badgeColor = 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300'; }
@@ -277,8 +306,8 @@ class UIRenderer {
                     else if (v.nguoi_vote === 'CON_DO_ME_CHON') { voterLabel = 'Mẹ chọn cho Con'; badgeColor = 'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300'; }
 
                     return `
-                      <div class="flex items-center justify-between text-xs py-1 px-2 rounded-lg bg-gray-50 dark:bg-gray-800/60">
-                        <span class="font-medium text-gray-800 dark:text-gray-200">${dish ? dish.ten_mon : 'Đã chọn món'}</span>
+                      <div class="flex items-center justify-between text-xs py-1.5 px-2.5 rounded-lg bg-gray-50 dark:bg-gray-800/60">
+                        <span class="font-medium text-gray-800 dark:text-gray-200">${dishNames}</span>
                         <span class="px-2 py-0.5 rounded text-[10px] font-semibold ${badgeColor}">${voterLabel}</span>
                       </div>
                     `;
@@ -451,11 +480,12 @@ class UIRenderer {
 
     const getMealText = (item) => {
       if (!item) return 'Chưa chốt';
-      if (item.mon_id) {
-        const d = this.store.getDishById(item.mon_id);
-        return d ? d.ten_mon : 'Món đã chọn';
+      const dishes = this.store.getDishesByIds(item.mon_id);
+      let text = dishes.map(d => d.ten_mon).join(' + ');
+      if (item.ghi_chu_dac_biet) {
+        text = text ? `${text} (${item.ghi_chu_dac_biet})` : item.ghi_chu_dac_biet;
       }
-      return item.ghi_chu_dac_biet || 'Không nấu';
+      return text || 'Món tự do';
     };
 
     const message = [
@@ -487,6 +517,8 @@ class UIRenderer {
     const currentVote = this.store.votes.find(v => v.ngay === dateStr && v.bua === mealType && v.nguoi_vote === voter);
     const selectedId = currentVote ? currentVote.mon_id : '';
 
+    const selectedIds = String(selectedId || '').split(',').map(s => s.trim()).filter(Boolean);
+
     const modalHtml = `
       <div id="modal-vote" class="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 modal-backdrop bg-black/40">
         <div class="bg-white dark:bg-gray-900 w-full sm:max-w-md rounded-t-3xl sm:rounded-2xl p-5 max-h-[85vh] flex flex-col shadow-2xl animate-fade-in">
@@ -495,7 +527,7 @@ class UIRenderer {
               <h3 class="font-bold text-gray-900 dark:text-gray-100 text-base">
                 ${isForKid ? 'Chọn hộ món cho Con trai' : 'Bình chọn món ăn'}
               </h3>
-              <p class="text-xs text-gray-400 mt-0.5">Bữa ${mealType === 'SANG' ? 'Sáng' : (mealType === 'TRUA' ? 'Trưa' : 'Tối')}</p>
+              <p class="text-xs text-gray-400 mt-0.5">Bữa ${mealType === 'SANG' ? 'Sáng' : (mealType === 'TRUA' ? 'Trưa' : 'Tối')} • Chọn 1 hoặc nhiều món (mặn, canh, xào...)</p>
             </div>
             <button id="btn-close-modal" class="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
               <i class="fa-solid fa-xmark text-lg"></i>
@@ -508,10 +540,11 @@ class UIRenderer {
               <div class="text-center py-6 text-gray-400 text-sm">Chưa có món nào được cấu hình cho bữa này.</div>
             ` : activeDishes.map(dish => {
               const delta = this.store.getLastEatenDeltaDays(dish.id, dateStr);
+              const isChecked = selectedIds.includes(dish.id);
               return `
                 <label class="flex items-center justify-between p-3 rounded-xl border border-gray-100 dark:border-gray-800 hover:bg-orange-50/50 dark:hover:bg-gray-800 cursor-pointer transition">
                   <div class="flex items-center space-x-3">
-                    <input type="radio" name="vote_dish" value="${dish.id}" ${dish.id === selectedId ? 'checked' : ''} class="text-orange-500 focus:ring-orange-400 w-4 h-4">
+                    <input type="checkbox" name="vote_dish" value="${dish.id}" ${isChecked ? 'checked' : ''} class="text-orange-500 focus:ring-orange-400 w-4 h-4 rounded">
                     <div>
                       <div class="text-sm font-semibold text-gray-800 dark:text-gray-200 flex items-center space-x-1.5">
                         <span>${dish.ten_mon}</span>
@@ -529,7 +562,7 @@ class UIRenderer {
           </div>
 
           <div class="pt-3 border-t border-gray-100 dark:border-gray-800 flex items-center space-x-2">
-            ${selectedId ? `
+            ${selectedIds.length > 0 ? `
               <button id="btn-cancel-vote" class="py-2.5 px-3 rounded-xl border border-red-200 dark:border-red-900/50 text-red-500 text-xs font-semibold hover:bg-red-50 dark:hover:bg-red-950/50 transition">
                 Hủy vote
               </button>
@@ -550,13 +583,13 @@ class UIRenderer {
         window.showToast('Đã xóa phiếu bình chọn.');
       });
       modal.querySelector('#btn-confirm-vote')?.addEventListener('click', () => {
-        const checked = modal.querySelector('input[name="vote_dish"]:checked');
-        if (checked) {
-          this.api.vote(dateStr, mealType, voter, checked.value);
+        const checkedBoxes = Array.from(modal.querySelectorAll('input[name="vote_dish"]:checked')).map(cb => cb.value);
+        if (checkedBoxes.length > 0) {
+          this.api.vote(dateStr, mealType, voter, checkedBoxes.join(','));
           modal.remove();
-          window.showToast('Đã lưu bình chọn của bạn!');
+          window.showToast(`Đã lưu bình chọn (${checkedBoxes.length} món)!`);
         } else {
-          window.showToast('Vui lòng chọn một món ăn!');
+          window.showToast('Vui lòng chọn ít nhất một món ăn!');
         }
       });
     });
@@ -674,19 +707,30 @@ class UIRenderer {
     }
   }
 
-  // Modal Chốt món chính
+  // Modal Chốt món chính (Hỗ trợ nhiều món)
   openChotModal(dateStr, mealType) {
     const votes = this.store.getMealVotes(dateStr, mealType);
     const activeDishes = this.store.getActiveDishes().filter(d => d.bua_an && d.bua_an.includes(mealType));
     const choter = this.store.role === 'FATHER' ? 'BA' : 'ME';
+
+    // Thu thập các món đã được gia đình vote hoặc đang được chốt trước đó
+    const preSelectedIds = new Set();
+    votes.forEach(v => {
+      const ids = String(v.mon_id || '').split(',').map(s => s.trim()).filter(Boolean);
+      ids.forEach(id => preSelectedIds.add(id));
+    });
+    const currentDecision = this.store.getMealDecision(dateStr, mealType);
+    if (currentDecision && currentDecision.mon_id) {
+      String(currentDecision.mon_id).split(',').map(s => s.trim()).filter(Boolean).forEach(id => preSelectedIds.add(id));
+    }
 
     const modalHtml = `
       <div id="modal-chot" class="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 modal-backdrop bg-black/40">
         <div class="bg-white dark:bg-gray-900 w-full sm:max-w-md rounded-t-3xl sm:rounded-2xl p-5 max-h-[85vh] flex flex-col shadow-2xl">
           <div class="flex items-center justify-between pb-3 border-b border-gray-100 dark:border-gray-800">
             <div>
-              <h3 class="font-bold text-gray-900 dark:text-gray-100 text-base">🎯 Quyết Định Chốt Món</h3>
-              <p class="text-xs text-gray-400 mt-0.5">Bữa ${mealType === 'SANG' ? 'Sáng' : (mealType === 'TRUA' ? 'Trưa' : 'Tối')}</p>
+              <h3 class="font-bold text-gray-900 dark:text-gray-100 text-base">🎯 Quyết Định Chốt Thực Đơn</h3>
+              <p class="text-xs text-gray-400 mt-0.5">Bữa ${mealType === 'SANG' ? 'Sáng' : (mealType === 'TRUA' ? 'Trưa' : 'Tối')} • Chọn 1 hoặc nhiều món (thịt, canh, xào...)</p>
             </div>
             <button id="btn-close-chot" class="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
               <i class="fa-solid fa-xmark text-lg"></i>
@@ -696,38 +740,59 @@ class UIRenderer {
           <div class="overflow-y-auto py-3 space-y-3 flex-1 pr-1">
             ${votes.length > 0 ? `
               <div>
-                <div class="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">Món được bình chọn nhiều nhất</div>
+                <div class="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-1.5 flex items-center justify-between">
+                  <span>Món được gia đình bình chọn</span>
+                  <span class="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold">(Được tick sẵn)</span>
+                </div>
                 <div class="space-y-1.5">
                   ${votes.map(v => {
-                    const dish = this.store.getDishById(v.mon_id);
-                    if (!dish) return '';
-                    return `
-                      <button data-chot-dish="${dish.id}" class="w-full text-left p-3 rounded-xl border border-emerald-200 dark:border-emerald-800 bg-emerald-50/40 dark:bg-emerald-950/20 hover:bg-emerald-100/50 flex items-center justify-between transition">
-                        <div>
-                          <span class="font-bold text-sm text-gray-800 dark:text-gray-100">${dish.ten_mon}</span>
-                          <div class="text-xs text-emerald-600 dark:text-emerald-400">Được đề xuất bởi phiếu bầu</div>
+                    const votedDishes = this.store.getDishesByIds(v.mon_id);
+                    if (votedDishes.length === 0) return '';
+                    return votedDishes.map(dish => `
+                      <label class="w-full p-2.5 rounded-xl border border-emerald-200 dark:border-emerald-800 bg-emerald-50/40 dark:bg-emerald-950/20 hover:bg-emerald-100/50 flex items-center justify-between cursor-pointer transition">
+                        <div class="flex items-center space-x-2.5">
+                          <input type="checkbox" name="chot_dish_id" value="${dish.id}" checked class="w-4 h-4 text-emerald-600 rounded focus:ring-emerald-500">
+                          <div>
+                            <span class="font-bold text-sm text-gray-800 dark:text-gray-100">${dish.ten_mon}</span>
+                            ${dish.con_thich ? '<span class="text-amber-500 text-xs ml-1">⭐</span>' : ''}
+                            <div class="text-[10px] text-emerald-600 dark:text-emerald-400">Được gia đình đề xuất</div>
+                          </div>
                         </div>
-                        <span class="px-3 py-1 bg-emerald-500 text-white text-xs font-bold rounded-lg">Chốt món này</span>
-                      </button>
-                    `;
+                        <span class="text-[11px] text-gray-400">${dish.loai_hinh === 'AN_TIEM' ? 'Ăn tiệm' : 'Tự nấu'}</span>
+                      </label>
+                    `).join('');
                   }).join('')}
                 </div>
               </div>
             ` : ''}
 
             <div>
-              <div class="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">Hoặc chọn món khác trong kho</div>
+              <div class="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">
+                ${votes.length > 0 ? 'Thêm/chọn món khác từ kho' : 'Chọn các món từ kho (mặn, canh, xào...)'}
+              </div>
               <div class="space-y-1">
-                ${activeDishes.map(dish => `
-                  <div class="p-2.5 rounded-xl border border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800 flex items-center justify-between text-xs">
-                    <span class="font-medium text-gray-800 dark:text-gray-200">${dish.ten_mon}</span>
-                    <button data-chot-dish="${dish.id}" class="px-2.5 py-1 bg-gray-200 dark:bg-gray-700 hover:bg-emerald-500 hover:text-white rounded-lg font-semibold transition">
-                      Chốt
-                    </button>
-                  </div>
-                `).join('')}
+                ${activeDishes.map(dish => {
+                  const isChecked = preSelectedIds.has(dish.id);
+                  return `
+                    <label class="p-2.5 rounded-xl border border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800 flex items-center justify-between text-xs cursor-pointer transition">
+                      <div class="flex items-center space-x-2.5">
+                        <input type="checkbox" name="chot_dish_id" value="${dish.id}" ${isChecked ? 'checked' : ''} class="w-4 h-4 text-emerald-600 rounded focus:ring-emerald-500">
+                        <span class="font-medium text-gray-800 dark:text-gray-200">${dish.ten_mon}</span>
+                        ${dish.con_thich ? '<span class="text-amber-500 text-xs">⭐</span>' : ''}
+                      </div>
+                      <span class="text-[10px] text-gray-400">${dish.loai_hinh === 'AN_TIEM' ? 'Ăn tiệm' : 'Tự nấu'}</span>
+                    </label>
+                  `;
+                }).join('')}
               </div>
             </div>
+          </div>
+
+          <div class="pt-3 border-t border-gray-100 dark:border-gray-800 flex items-center space-x-2">
+            <button id="btn-confirm-chot" class="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700 text-white text-sm font-bold shadow-md shadow-emerald-500/20 flex items-center justify-center space-x-1.5 transition">
+              <i class="fa-solid fa-circle-check"></i>
+              <span id="btn-chot-label">Chốt các món đã chọn</span>
+            </button>
           </div>
         </div>
       </div>
@@ -735,13 +800,30 @@ class UIRenderer {
 
     this.renderModal(modalHtml, (modal) => {
       modal.querySelector('#btn-close-chot')?.addEventListener('click', () => modal.remove());
-      modal.querySelectorAll('button[data-chot-dish]').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-          const dishId = e.currentTarget.getAttribute('data-chot-dish');
-          this.api.chotMon(dateStr, mealType, dishId, choter);
-          modal.remove();
-          window.showToast('Đã chốt món thành công!');
-        });
+
+      const updateCount = () => {
+        const checkedList = Array.from(new Set(Array.from(modal.querySelectorAll('input[name="chot_dish_id"]:checked')).map(cb => cb.value)));
+        const label = modal.querySelector('#btn-chot-label');
+        if (label) {
+          label.textContent = checkedList.length > 0 ? `Chốt ${checkedList.length} món này` : 'Vui lòng tick chọn món';
+        }
+      };
+
+      modal.querySelectorAll('input[name="chot_dish_id"]').forEach(cb => {
+        cb.addEventListener('change', updateCount);
+      });
+      updateCount();
+
+      modal.querySelector('#btn-confirm-chot')?.addEventListener('click', () => {
+        const checkedList = Array.from(new Set(Array.from(modal.querySelectorAll('input[name="chot_dish_id"]:checked')).map(cb => cb.value)));
+        if (checkedList.length === 0) {
+          window.showToast('Vui lòng tick chọn ít nhất một món ăn!');
+          return;
+        }
+
+        this.api.chotMon(dateStr, mealType, checkedList.join(','), choter);
+        modal.remove();
+        window.showToast(`Đã chốt thực đơn (${checkedList.length} món)!`);
       });
     });
   }
@@ -784,9 +866,9 @@ class UIRenderer {
 
             const getTitle = (item) => {
               if (!item) return '<span class="text-gray-400 italic">Chưa chọn</span>';
-              if (item.mon_id) {
-                const d = this.store.getDishById(item.mon_id);
-                return d ? `<strong class="text-gray-800 dark:text-gray-200">${d.ten_mon}</strong>` : 'Món đã chọn';
+              const dishes = this.store.getDishesByIds(item.mon_id);
+              if (dishes.length > 0) {
+                return `<strong class="text-gray-800 dark:text-gray-200">${dishes.map(d => d.ten_mon).join(' + ')}</strong>`;
               }
               return `<span class="text-gray-600 dark:text-gray-300 font-medium">${item.ghi_chu_dac_biet}</span>`;
             };

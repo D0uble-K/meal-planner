@@ -241,22 +241,24 @@ function handleVote(payload) {
     }
   }
   
-  if (payload.mon_id === null || payload.mon_id === '') {
+  const monIdVal = Array.isArray(payload.mon_id) ? payload.mon_id.join(',') : (payload.mon_id || '');
+
+  if (monIdVal === null || monIdVal === '') {
     // Hủy vote
     if (foundRowIndex > 0) {
       sheet.deleteRow(foundRowIndex);
     }
   } else {
     if (foundRowIndex > 0) {
-      sheet.getRange(foundRowIndex, 4).setValue(payload.mon_id);
+      sheet.getRange(foundRowIndex, 4).setValue(monIdVal);
     } else {
-      sheet.appendRow([payload.ngay, payload.bua, payload.nguoi_vote, payload.mon_id, currentNhuongQuyen]);
+      sheet.appendRow([payload.ngay, payload.bua, payload.nguoi_vote, monIdVal, currentNhuongQuyen]);
     }
   }
   return { success: true };
 }
 
-// Xử lý Chốt món
+// Xử lý Chốt món (Hỗ trợ 1 hoặc nhiều món)
 function handleChotMon(payload) {
   // payload: { ngay, bua, mon_id, nguoi_chot, ghi_chu_dac_biet }
   const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -264,6 +266,7 @@ function handleChotMon(payload) {
   const rowsHistory = sheetHistory.getDataRange().getValues();
   
   const nowStr = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd HH:mm:ss');
+  const monIdVal = Array.isArray(payload.mon_id) ? payload.mon_id.join(',') : (payload.mon_id || '');
   let targetRow = -1;
   
   for (let i = 1; i < rowsHistory.length; i++) {
@@ -277,7 +280,7 @@ function handleChotMon(payload) {
   
   if (targetRow > 0) {
     sheetHistory.getRange(targetRow, 3, 1, 4).setValues([[
-      payload.mon_id || '',
+      monIdVal,
       payload.ghi_chu_dac_biet || '',
       payload.nguoi_chot || '',
       nowStr
@@ -286,7 +289,7 @@ function handleChotMon(payload) {
     sheetHistory.appendRow([
       payload.ngay,
       payload.bua,
-      payload.mon_id || '',
+      monIdVal,
       payload.ghi_chu_dac_biet || '',
       payload.nguoi_chot || '',
       nowStr

@@ -140,6 +140,18 @@ class Store {
     return this.dishes.filter(d => d.da_xoa);
   }
 
+  // Lấy danh sách món theo mảng ID hoặc chuỗi ID phân cách bởi dấu phẩy
+  getDishesByIds(idOrIds) {
+    if (!idOrIds) return [];
+    let idList = [];
+    if (Array.isArray(idOrIds)) {
+      idList = idOrIds;
+    } else if (typeof idOrIds === 'string') {
+      idList = idOrIds.split(',').map(s => s.trim()).filter(Boolean);
+    }
+    return idList.map(id => this.getDishById(id)).filter(Boolean);
+  }
+
   // Lấy thông tin chốt món cho một ngày & bữa
   getMealDecision(dateStr, mealType) {
     return this.history.find(h => h.ngay === dateStr && h.bua === mealType);
@@ -168,7 +180,8 @@ class Store {
 
       this.history.forEach(h => {
         if (h.ngay === prevDateStr && h.mon_id) {
-          eatenDishIds.add(h.mon_id);
+          const ids = String(h.mon_id).split(',').map(s => s.trim()).filter(Boolean);
+          ids.forEach(id => eatenDishIds.add(id));
         }
       });
     }
@@ -182,10 +195,13 @@ class Store {
     let latestEatenDate = null;
 
     this.history.forEach(h => {
-      if (h.mon_id === dishId && h.ngay < currentDateStr) {
-        const d = new Date(h.ngay);
-        if (!latestEatenDate || d > latestEatenDate) {
-          latestEatenDate = d;
+      if (h.mon_id && h.ngay < currentDateStr) {
+        const ids = String(h.mon_id).split(',').map(s => s.trim()).filter(Boolean);
+        if (ids.includes(dishId)) {
+          const d = new Date(h.ngay);
+          if (!latestEatenDate || d > latestEatenDate) {
+            latestEatenDate = d;
+          }
         }
       }
     });
@@ -355,18 +371,19 @@ class Store {
 
   // Cập nhật vote lạc quan (Optimistic Update)
   setVoteOptimistic(ngay, bua, nguoi_vote, mon_id) {
+    const monIdStr = Array.isArray(mon_id) ? mon_id.join(',') : (mon_id || '');
     const existingIdx = this.votes.findIndex(v => v.ngay === ngay && v.bua === bua && v.nguoi_vote === nguoi_vote);
-    if (!mon_id) {
+    if (!monIdStr) {
       if (existingIdx >= 0) this.votes.splice(existingIdx, 1);
     } else {
       if (existingIdx >= 0) {
-        this.votes[existingIdx].mon_id = mon_id;
+        this.votes[existingIdx].mon_id = monIdStr;
       } else {
         this.votes.push({
           ngay,
           bua,
           nguoi_vote,
-          mon_id,
+          mon_id: monIdStr,
           nhuong_quyen: false
         });
       }
@@ -375,13 +392,14 @@ class Store {
     this.notify();
   }
 
-  // Chốt món lạc quan
+  // Chốt món lạc quan (Hỗ trợ nhiều món)
   setChotMonOptimistic(ngay, bua, mon_id, nguoi_chot, ghi_chu_dac_biet = '') {
+    const monIdStr = Array.isArray(mon_id) ? mon_id.join(',') : (mon_id || '');
     const existingIdx = this.history.findIndex(h => h.ngay === ngay && h.bua === bua);
     const item = {
       ngay,
       bua,
-      mon_id,
+      mon_id: monIdStr,
       ghi_chu_dac_biet,
       nguoi_chot,
       thoi_gian_chot: new Date().toISOString()
